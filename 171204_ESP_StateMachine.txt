@@ -1,0 +1,61 @@
+Init(); //Wifi, RFID, I2C GPIOS, LED's, ESP Peripherie
+
+StateMachine states:
+-	Start
+-	Connect_WiFi
+-	Running
+
+Loop(){
+	switch(state){
+	case START:
+		Wifi.Connect();
+		state = CONNECTING;
+		timeout = 0;
+		break;
+	case CONNECT_WIFI:
+		if(Wifi.Status() == WIFI_CONNECT){ //Connect to Wifi 
+			state = RUNNING;
+			timeout = 0;
+		}else{
+			iTimeout += looptime;
+			if(iTimeout > MAX_TIME){
+				state = START;
+			}
+		}
+		break;
+	case RUNNING:
+		if(!Wifi.Connected()){
+			state = START;
+		}
+		break;
+	}
+	SetConnectionLED(state);
+	ReadCard(state);
+}
+bool ReadCard(state){
+	int ID = 0;
+	if (ID = Card.Present()){
+		switch(state){
+			case START:
+			case CONNECT_WIFI:
+				SetBuzzer(BUZZER_ERROR);
+				break;
+			case RUNNING:
+				SetTxRxLed(TX_RX_ON); //fast blinking
+				bool bOk = SendDataToServer(ID,thisDevice); //Connect, send, receive, disconnect
+				if (bOk && ID != currentID){
+					EnableRelay();
+					g_currentID = ID;
+					SetBuzzer(BUZZER_LOGIN);
+					//Add a sleep or something to avoid instant off switching.
+				}else{
+					DisableRelay();
+					g_currentID = 0;
+					SetBuzzer(BUZZER_LOGOUT);
+				}
+				SetTxRxLED(TX_RX_OFF);
+			break;
+				
+		}
+	}
+}
