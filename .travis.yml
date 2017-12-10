@@ -39,7 +39,7 @@ install:
 
 script:
      - cd Software_ESP
-     - cp example_config.h config.h
+     - cp src/example_config.h src/config.h
      - platformio run
 
 
