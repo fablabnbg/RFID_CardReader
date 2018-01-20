@@ -2,12 +2,16 @@
 
 #include "ATM_RFIDRelay.h"
 
+// CONFIG: PIN layout
+#define RST_PIN         D0  //16      // Configurable, see typical pin layout above
+#define SS_PIN          D8  //15      // Configurable, see typical pin layout above
+// Defaults for SPI
+// MOSI  = 13	D7
+// MISO  = 12	D6
+// SCK   = 14	D5
 #include <SPI.h>
 #include <MFRC522.h>
 
-// CONFIG: PIN layout
-#define RST_PIN         D0         // Configurable, see typical pin layout above
-#define SS_PIN          D8         // Configurable, see typical pin layout above
 
 #include <Wire.h>  // Wire is needed for I2C (TWI)
 #include "Adafruit_MCP23017.h"
@@ -18,6 +22,7 @@
 #include "config.h"
 
 MFRC522 cardreader(SS_PIN, RST_PIN);  // Create MFRC522 instance
+
 
 ATM_RFIDRelay relay;				  // Instance of the "main" state machine
 
@@ -43,7 +48,8 @@ void setup() {
 	relay.begin().trace(Serial);
 
 	wifi.begin( ap_ssid, ap_password )
-		// WARNING: LED_BUILTIN is RX (UART) on ESP-12, so this interferes with Serial communication on ESP-12 modules
+		// NOTE: LED_BUILTIN is RX (UART) on ESP-12, so this interferes with Serial communication on
+		// ESP-12 modules (including most Wemos D1, because they also use ESP-12)
 	    .led( LED_BUILTIN, true ) // Esp8266 built in led shows wifi status
 		.onChange(0, relay, ATM_RFIDRelay::EVT_EV_CONNLOST) // directly send an Event from Wifi the the relay state machine
 		.onChange(1, relay, ATM_RFIDRelay::EVT_EV_CONNECTED)// "sub-slot" 0: Connection lost; 1: Connected
