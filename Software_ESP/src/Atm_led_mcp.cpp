@@ -6,6 +6,7 @@
  */
 
 #include <Atm_led_mcp.h>
+#include <Atm_led.hpp>
 
 Atm_led_mcp::Atm_led_mcp(Adafruit_MCP23017& _gpio):
 	Atm_led(),			// base class ctor would also be called implicitly, but better style to mention this explicitly :)
@@ -16,13 +17,16 @@ Atm_led_mcp::Atm_led_mcp(Adafruit_MCP23017& _gpio):
 void Atm_led_mcp::initLED() {
 	gpio.pinMode(pin, OUTPUT);
 	gpio.digitalWrite(pin, activeLow ? HIGH : LOW);
+	Serial.printf("LED init on pin %c%x\n", activeLow?'~':' ', pin);
 }
 
 void Atm_led_mcp::switchOn() {
+	Serial.printf("LED ON on pin %c%x\n", activeLow?'~':' ', pin);
 	gpio.digitalWrite(pin, !activeLow);
 }
 
 void Atm_led_mcp::switchOff() {
+	Serial.printf("LED OFF on pin %c%x\n", activeLow?'~':' ', pin);
 	gpio.digitalWrite(pin, activeLow);
 }
 

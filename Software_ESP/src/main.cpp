@@ -56,7 +56,7 @@ void setup() {
 	    .start();
 
 	// Uncomment to enable debug info about the WiFi state machine on Serial
-	//wifi.trace(Serial);
+	wifi.trace(Serial);
 }
 
 

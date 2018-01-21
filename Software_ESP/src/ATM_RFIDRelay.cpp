@@ -10,7 +10,7 @@
 
 const char client_host[] = "192.168.0.220";
 
-/*** Some black magic with lambda functios.
+/*** Some black magic with lambda functions.
  * Automaton does not support lambdas for callback, except if they
  * don't capture any variable and have the exact signature as needed.
  * (In that case, lambdas are the same as the "old-style" function pointers).
@@ -49,11 +49,6 @@ ATM_RFIDRelay& ATM_RFIDRelay::begin() {
 
 	gpio.begin(); // CONFIG: use default address 0x20
 
-	// CONFIG: Initialize outputs with MCP23017 PINs
-	led_rxtx.begin(5);
-	led_conn.begin(6);
-	bit_switch.begin(8);
-	buzzer.begin(7);
 
 	// CONFIG: Initialize inputs
 	switch_off.begin(0).onPress(*this, EVT_EV_OFF);  // Button 0 switches off
@@ -63,6 +58,18 @@ ATM_RFIDRelay& ATM_RFIDRelay::begin() {
 		triggerResponseWrap();
 	});
 	httpClient.trace(Serial);
+
+	// CONFIG: Initialize outputs with MCP23017 PINs
+	led_rxtx.begin(5, true).trace(Serial);
+	led_conn.begin(6, true).trace(Serial);
+	bit_switch.begin(8).trace(Serial);
+	buzzer.begin(7).trace(Serial);
+
+	led_rxtx.off();
+	led_conn.off();
+	bit_switch.off();
+	buzzer.off();
+
 
 	return *this;
 }
@@ -103,17 +110,23 @@ void ATM_RFIDRelay::action(int id) {
 	case ENT_NO_CONNECTION_OFF:
 		led_conn.off();
 		bit_switch.off();
-		buzzer.blink(800,500,3);	// 3 Long BEEP
+		buzzer.off();
+		//buzzer.blink(800,500,3);	// 3 Long BEEP
 		return;
 	case ENT_NO_CONNECTION_BRIDGED:
 		buzzer.blink(200, 60000);	// BEEP every minute
 		return;
 	case ENT_CONNECTED_OFF:
 		led_rxtx.off();		// switch off LED after notification of rejection
+		led_conn.blink();			//FIXME: Test only
+		buzzer.blink();
+		//buzzer.blink(200, 500, 5);  //FIXME: Test only
+		bit_switch.on();
 		return;
 	case ENT_CONNECTED_ON:
 		timer_max_on.set(1000 * 60 * 180); // 3 hours
 		buzzer.blink(50, 100, 1);	// 1 very short BEEP
+		led_conn.on();
 		return;
 	case ENT_CONNECTED_CIP:
 		led_rxtx.blink(40, 60);
@@ -205,6 +218,7 @@ ATM_RFIDRelay& ATM_RFIDRelay::ev_connlost() {
 }
 
 ATM_RFIDRelay& ATM_RFIDRelay::ev_connected() {
+	Serial.println("Connected, switching LED_CONN to ON");
 	led_conn.on();
 	trigger(EVT_EV_CONNECTED);
 	return *this;

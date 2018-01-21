@@ -13,6 +13,7 @@ class ATM_RFIDRelay: public Machine {
     enum { EVT_EV_OFF, EVT_TIMER_REJ_NOTIFY, EVT_TIMER_MAXON, EVT_EV_AUTHREJ, EVT_EV_AUTHCONF, EVT_EV_AUTHREQ, EVT_EV_CONNLOST, EVT_EV_CONNECTED, ELSE }; // EVENTS
   ATM_RFIDRelay() :
 	  Machine(),
+	  gpio(),
 	  led_rxtx(gpio),
   	  led_conn(gpio),
 	  bit_switch(gpio),
