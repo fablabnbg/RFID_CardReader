@@ -23,12 +23,12 @@ class ATM_RFIDRelay: public Machine {
   ATM_RFIDRelay& trace( Stream & stream );
   ATM_RFIDRelay& trigger( int event );
   int state( void );
-  ATM_RFIDRelay& ev_off( void );
+//  ATM_RFIDRelay& ev_off( void );
   ATM_RFIDRelay& ev_authrej( void );
   ATM_RFIDRelay& ev_authconf( void );
   ATM_RFIDRelay& ev_authreq( void );
-  ATM_RFIDRelay& ev_connlost( void );
-  ATM_RFIDRelay& ev_connected( void );
+//  ATM_RFIDRelay& ev_connlost( void );
+//  ATM_RFIDRelay& ev_connected( void );
 
   void triggerRequest(uint16_t id);
 

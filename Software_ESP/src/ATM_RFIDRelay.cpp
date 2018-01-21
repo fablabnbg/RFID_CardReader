@@ -110,31 +110,35 @@ void ATM_RFIDRelay::action(int id) {
 	case ENT_NO_CONNECTION_OFF:
 		led_conn.off();
 		bit_switch.off();
-		buzzer.off();
-		//buzzer.blink(800,500,3);	// 3 Long BEEP
+		led_rxtx.off();
+		buzzer.on();
+		buzzer.blink(800,500,3);	// 3 Long BEEP
 		return;
 	case ENT_NO_CONNECTION_BRIDGED:
 		buzzer.blink(200, 60000);	// BEEP every minute
+		led_rxtx.blink(50,50);		// Fast BLINK rxtx
+		led_conn.off();
+		//TODO: Inform server about bridge
 		return;
 	case ENT_CONNECTED_OFF:
 		led_rxtx.off();		// switch off LED after notification of rejection
-		led_conn.blink();			//FIXME: Test only
-		buzzer.blink();
-		//buzzer.blink(200, 500, 5);  //FIXME: Test only
-		bit_switch.on();
+		led_conn.on();
 		return;
 	case ENT_CONNECTED_ON:
 		timer_max_on.set(1000 * 60 * 180); // 3 hours
 		buzzer.blink(50, 100, 1);	// 1 very short BEEP
+		bit_switch.on();
 		led_conn.on();
 		return;
 	case ENT_CONNECTED_CIP:
-		led_rxtx.blink(40, 60);
+		led_rxtx.blink(40, 100);
 		return;
 	case EXT_CONNECTED_CIP:	//TODO: Cancel pending request
 	      return;
 	case ENT_CONNECTED_BRIDGED:
 		buzzer.blink(200, 60000);	// BEEP every minute
+		led_conn.on();
+		led_rxtx.blink(50,50);
 		return;
 	case ENT_CONNECTED_REJECTED:
 		led_rxtx.on();		// switch on LED permanently to notify about rejection
@@ -190,11 +194,11 @@ int ATM_RFIDRelay::state( void ) {
  *    They will be overwritten by the online state machine editor
  *    So save them before.
  */
-ATM_RFIDRelay& ATM_RFIDRelay::ev_off() {
-  trigger( EVT_EV_OFF );
-  return *this;
-}
-
+//ATM_RFIDRelay& ATM_RFIDRelay::ev_off() {
+//  trigger( EVT_EV_OFF );
+//  return *this;
+//}
+//
 ATM_RFIDRelay& ATM_RFIDRelay::ev_authrej() {
 	trigger(EVT_EV_AUTHREJ);
 	return *this;
@@ -211,18 +215,18 @@ ATM_RFIDRelay& ATM_RFIDRelay::ev_authreq() {
 	return *this;
 }
 
-ATM_RFIDRelay& ATM_RFIDRelay::ev_connlost() {
-	led_conn.off();
-	trigger(EVT_EV_CONNLOST);
-	return *this;
-}
+//ATM_RFIDRelay& ATM_RFIDRelay::ev_connlost() {
+//	led_conn.off();
+//	trigger(EVT_EV_CONNLOST);
+//	return *this;
+//}
 
-ATM_RFIDRelay& ATM_RFIDRelay::ev_connected() {
-	Serial.println("Connected, switching LED_CONN to ON");
-	led_conn.on();
-	trigger(EVT_EV_CONNECTED);
-	return *this;
-}
+//ATM_RFIDRelay& ATM_RFIDRelay::ev_connected() {
+//	Serial.println("Connected, switching LED_CONN to ON");
+//	led_conn.on();
+//	trigger(EVT_EV_CONNECTED);
+//	return *this;
+//}
 
 /* State trace method
  * Sets the symbol table and the default logging method for serial monitoring
