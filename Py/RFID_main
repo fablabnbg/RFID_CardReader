@@ -1,0 +1,77 @@
+import sys
+import time
+import socket
+import json
+
+sys.path.append("../PyCommon")
+
+from  jsonsocket import Client, Server
+from _thread import start_new_thread
+
+
+def main2():
+    host = 'localhost'
+    port = 9999
+
+    # Server code:
+    server = Server(host, port)
+    server.accept()
+    data = server.recv()
+    print(data["ID"])
+    print(data["Name2"])
+
+    # data now is: {'some_list': [123, 456]}
+    #server.send({'data': data}).close()
+
+def client_thread(port):
+    server = Server('', port)
+    print("[-] Socket Created")
+    # blocking call, waits to accept a connection
+    server.accept()
+    print("[-] Connection accepted!")
+    while True:
+        print("waiting for data ...")
+        data = server.recv()
+        print("data received")
+        if not data:
+            print(".")
+            break
+
+        recdata = json.dumps({'Response' : '0'})
+        #print("data = ", data);
+        server.send(recdata)
+    print("Server closed!")
+    server.close()
+
+
+def main():
+    HOST = ''  # all availabe interfaces
+    PORT = 55411  # get the next free port
+
+    while True:
+        portServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            portServer.bind((HOST, PORT))
+        except socket.error as msg:
+            print("Bind exception! " + msg)
+            sys.exit(-1)
+
+        portServer.listen()
+        print("Wait for connection")
+        (conn, addr) = portServer.accept()
+        print("Connection accepted")
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind((HOST, 0))
+        portNo = s.getsockname()[1]
+        print("Port number for client: " + str(portNo))
+        print("Sending " + str(int(portNo.bit_length() / 8)) + " bytes.")
+        conn.sendall(portNo.to_bytes( int(portNo.bit_length() / 8), 'little'))
+        start_new_thread(client_thread, (portNo,))
+        s.close()
+        portServer.close()
+
+    portServer.close()
+    sys.exit(0)
+
+if __name__ == "__main__":
+    main()

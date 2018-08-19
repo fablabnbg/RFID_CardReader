@@ -1,6 +1,3 @@
-#include <Automaton.h>
-
-#include "ATM_RFIDRelay.h"
 
 // CONFIG: PIN layout
 #define RST_PIN         D0  //16      // Configurable, see typical pin layout above
@@ -11,20 +8,74 @@
 // SCK   = 14	D5
 #include <SPI.h>
 #include <MFRC522.h>
-
+#include <ESP8266Wifi.h>
 
 #include <Wire.h>  // Wire is needed for I2C (TWI)
 #include "Adafruit_MCP23017.h"
 
+
 // To protect real passwords, config.h is not included on the github repository.
 //   So if this file is not found, copy
 //   example_config.h to config.h and adapt values
-#include "config.h"
+#include "example_config.h"
+#include "GPIOHandler.h"
+#include "CommunicationHandler.h"
+#include "RFIDStateMachine.h"
+#include "TimeoutHandler.h"
 
-MFRC522 cardreader(SS_PIN, RST_PIN);  // Create MFRC522 instance
+MFRC522 Cardreader(SS_PIN, RST_PIN);  // Create MFRC522 instance
+MFRC522::Uid CurrentCard = {0};
+GPIOHandler Ctrl;
+RFIDState State;
+RFIDTrigger Trigger;
+WiFiClient Client;
+TimeoutHandler Timeout;
+CommunicationHandler Comm;
 
+bool SameCard(){
+	bool bOk = true;
+	if(Cardreader.uid.size == CurrentCard.size
+	&& Cardreader.uid.sak  == CurrentCard.sak){
+		for(int i = 0; i < 10; i++){
+			bOk = bOk && (Cardreader.uid.uidByte[i] == CurrentCard.uidByte[i]);
+		}
+		Serial.println("Cards are " + bOk ? "identical " : "not identical");
+		return bOk;
+	}else{
+		return false;
+	}
+}
+uint8_t GetState(){
+	uint8_t commState;
+	if(State == eStateRunning){
+		commState = RFID_STATE_RUNNING;
+	}else{
+		commState = RFID_STATE_ERROR;
+	}
+	if(Ctrl.RelayState() == RelOn){
+		commState |= RFID_STATE_RELAY_ON;
+	}else{
+		commState |= RFID_STATE_RELAY_OFF;
+	}
+	return commState;
+}
 
-ATM_RFIDRelay relay;				  // Instance of the "main" state machine
+void Verify(){
+	Ctrl.LEDTxRx(LEDOn);
+	Serial.println("Card verification");
+	if(Comm.VerifyCard(Cardreader.uid.uidByte, Cardreader.uid.size, GetState())){
+		Serial.println("Access granted");
+		CurrentCard = Cardreader.uid;
+		Ctrl.Relay(RelOn);
+		Timeout.ResetTimeout();
+		Ctrl.Buzzer(BuzzAck);
+	}else{
+		Serial.println("Access denied");
+		Ctrl.Relay(RelOff);
+		Ctrl.Buzzer(BuzzNak);
+	}
+	Ctrl.LEDTxRx(LEDOff);
+}
 
 void setup() {
 	/* Initialize Serial
@@ -35,63 +86,173 @@ void setup() {
 	*/
 	Serial.begin(74880);
 	Serial.println("Setup");
-	// flush(), so it is made sure that the text is seen
-	//  This helps debugging potential exceptions that may occur shortly after.
-	//  If flush() is used and if message is not on Serial, the crash occured before (== one of the constructors of global objects)
-	Serial.flush();
-
+	Ctrl.GPIOTest();
+  WiFi.begin(ap_ssid, ap_password);
+	State = eStateConnecting;
+  Trigger = eTriggerOn;
 	SPI.begin();				// Init SPI with default values
-	cardreader.PCD_Init();		// Init MFRC522
-	cardreader.PCD_DumpVersionToSerial();	// Show details of PCD - MFRC522 Card Reader details
-
-	// Enable debug info about the relay state machine on Serial
-	relay.begin().trace(Serial);
-
-	wifi.begin( ap_ssid, ap_password )
-		// NOTE: LED_BUILTIN is RX (UART) on ESP-12, so this interferes with Serial communication on
-		// ESP-12 modules (including most Wemos D1, because they also use ESP-12)
-	    .led( LED_BUILTIN, true ) // Esp8266 built in led shows wifi status
-		.onChange(0, relay, ATM_RFIDRelay::EVT_EV_CONNLOST) // directly send an Event from Wifi the the relay state machine
-		.onChange(1, relay, ATM_RFIDRelay::EVT_EV_CONNECTED)// "sub-slot" 0: Connection lost; 1: Connected
-	    .start();
-
-	// Uncomment to enable debug info about the WiFi state machine on Serial
-	wifi.trace(Serial);
+	Cardreader.PCD_Init();		// Init MFRC522
 }
 
+void loop(){
+	//Serial.printf("Start\n");
+	while(WiFi.status() != WL_CONNECTED){
+		Serial.print(".");
+		Ctrl.LEDConn(LEDOff);
+		Ctrl.Buzzer(BuzzOff);
+		Ctrl.Update();
+		delay(100);
+	}
+  //Serial.printf("Wifi connected to %s\n", WiFi.localIP().toString().c_str());
+	if(Ctrl.RelayBypassed()){
+		Ctrl.Buzzer(BuzzAnnoy);
+		Serial.printf("Relay Bypassed!");
+		State = eStateInactive;
+	}else{
+		if(State == eStateInactive){
+			Serial.println("Relay Bypassing resolved");
+			Ctrl.Buzzer(BuzzOff);
+			State = eStateRunning;
+		}
+	}
+	//Serial.printf("Before Is Connected\n");
+	//TO DO: Server connection and checking if data is available ?!
+	//			 reading of enclosure switch (sabotage)
+	if(!Comm.IsConnected()){
+		Comm.Disconnect();
+		if(!Comm.Connect(Server, Port)){
+			State = eStateConnecting;
+			Serial.println("Connecting to RFID Server ...");
+		}else{
+			Serial.println("Connection to RFID Server succeeded");
+			Ctrl.LEDConn(LEDOn);
+			//Client.println("Halo1bims!");
+			State = eStateRunning;
+		}
+  }
+//Serial.printf("Before Card Check\n");
+	if( (State == eStateRunning) && Cardreader.PICC_IsNewCardPresent() && Cardreader.PICC_ReadCardSerial() ){
+		Serial.println("Card detected");
+		Cardreader.PICC_DumpToSerial(&(Cardreader.uid));
+		if(Ctrl.RelayState() == RelOn){
+			if(SameCard()){
+				if(Timeout.TimeoutCritical()){
+					Serial.println("Timeout reset");
+					Timeout.ResetTimeout();
+					Ctrl.Buzzer(BuzzAck);
+				}else{
+					Serial.println("Timeout decreased");
+					Timeout.SetTimeoutCritical();
+					Ctrl.Buzzer(BuzzWaitForUser);
+				}
+			}else{ //friendly fire
+				 Verify();
+			}
+		}else{
+			 Verify();
+		}
 
+
+	}
+//Serial.printf("Before Timeout Check\n");
+	if ( !Timeout.UpdateTimeout()){
+		Serial.println("Timeout expired");
+			Ctrl.Relay(RelOff);
+			Ctrl.Buzzer(BuzzOff);
+	}
+	if ( Timeout.TimeoutCritical()){
+		Serial.println("Timeout critical");
+		Ctrl.Buzzer(BuzzWaitForUser);
+	}
+	//Serial.printf("Before Ctrl Update\n");
+	Ctrl.Update();
+	//Serial.printf("End\n");
+}
+
+/*
 void loop() {
-    automaton.run();  // Run cycle of Automaton state machine
-
-	// Look for new cards, TODO: Don't retrigger new card
-	if ( ! cardreader.PICC_IsNewCardPresent()) {
-		return;
+	if(WiFi.status() != WL_CONNECTED){
+		State = eStateConnecting;
+		Ctrl.LEDConn(LEDOff);
+		Ctrl.Buzzer(BuzzOff);
+		Ctrl.Update();
 	}
-	Serial.println("New card present!");
-
-	if (relay.state() == ATM_RFIDRelay::CONNECTED_CIP)
-	{
-		Serial.println("Request pending - ignoring card");
-		return;
+	if(Ctrl.RelayBypassed()){
+		Ctrl.Buzzer(BuzzLongBeeps);
+		Serial.printf("Relay Bypassed!");
+		State = eStateInactive;
 	}
 
-	// Select one of the cards
-	if ( ! cardreader.PICC_ReadCardSerial()) {
-		return;
+  switch(State){
+		case eStateConnecting:
+		  Serial.printf("State = Connecting");
+			while (WiFi.status() != WL_CONNECTED)
+		  {
+		    delay(500);
+		    Serial.print(".");
+		  }
+			if(Client.connect(Server, Port)){
+				Serial.println("Connection to RFID Server succeeded");
+				Client.println("Halo1bims!");
+			}
+			State = eStateRunning;
+			Ctrl.LEDConn(LEDOn);
+			break;
+		case eStateRunning:
+		  Serial.printf("State = Running");
+			Ctrl.Buzzer(BuzzOff);
+			if( Cardreader.PICC_ReadCardSerial() ){
+				Cardreader.PICC_DumpToSerial(&(Cardreader.uid));
+				Serial.printf("New Card present: Size = %d \n",Cardreader.uid.size);
+				Serial.printf("UID = [");
+				for(int i = 0; i < 10; i++){
+					Serial.printf(" 0x%x",Cardreader.uid.uidByte[i]);
+				}
+				Serial.printf("] \n Sak= %d",Cardreader.uid.sak);
+				State = eStateVerify;
+				Ctrl.LEDTxRx(LEDOn);
+			}else{
+				Serial.printf("No card present");
+				Ctrl.LEDTxRx(LEDOff);
+			}
+			break;
+		case eStateVerify:
+		  Serial.printf("State = Verify");
+			//send card info to server
+			if(true){ //check if server accepts card info
+				CurrentCard = Cardreader.uid;
+				Ctrl.Buzzer(BuzzShortBeepsPos);
+			}else{
+				Ctrl.Buzzer(BuzzShortBeepsNeg);
+			}
+			State = eStateCardPresent;
+			break;
+		case eStateCardPresent:
+			Serial.printf("State = Card Present");
+			switch(Trigger){
+				case eTriggerOn:
+					Serial.printf("Turn circuit on");
+					Ctrl.Relay(RelOn);
+					Trigger = eTriggerOff;
+				break;
+				case eTriggerOff:
+					if (SameCard()){
+						Serial.printf("Turn circuit off");
+						Ctrl.Buzzer(BuzzRelOff);
+						Ctrl.Relay(RelOff);
+					}
+					Trigger = eTriggerOn;
+				break;
+			}
+			State = eStateRunning;
+			break;
+		case eStateInactive:
+			State = eStateRunning;
+			break;
+		default:
+			break;
 	}
+	delay(CYCLE_TIME);
+	Ctrl.Update();
 
-	uint32_t uid = static_cast<uint32_t>(cardreader.uid.uidByte[0] << 24
-			| cardreader.uid.uidByte[1] << 16 | cardreader.uid.uidByte[2] << 8
-			| cardreader.uid.uidByte[3]);
-	Serial.println(uid, HEX);
-	relay.triggerRequest(uid);
-
-	// Set card to halt so it is not detected again
-	MFRC522::StatusCode rc = cardreader.PICC_HaltA();
-	if (rc != MFRC522::STATUS_OK) {
-		Serial.printf("Warning: Cannot set card to halt state [Error %x]", rc);
-	}
-
-	// Dump debug info about the card; PICC_HaltA() is automatically called
-	//	cardreader.PICC_DumpToSerial(&(cardreader.uid));
-}
+}*/
