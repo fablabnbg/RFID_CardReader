@@ -15997,11 +15997,6 @@ Summe: 380 mA</text>
 <junction x="309.88" y="120.65"/>
 </segment>
 <segment>
-<pinref part="IC2" gate="G$1" pin="GPB1"/>
-<wire x1="160.02" y1="71.12" x2="162.56" y2="71.12" width="0.1524" layer="91"/>
-<pinref part="R15" gate="G$1" pin="2"/>
-</segment>
-<segment>
 <pinref part="R5" gate="G$1" pin="1"/>
 <wire x1="187.96" y1="73.66" x2="193.04" y2="73.66" width="0.1524" layer="91"/>
 <label x="193.04" y="73.66" size="1.778" layer="95"/>
@@ -16249,6 +16244,13 @@ Summe: 380 mA</text>
 <wire x1="309.88" y1="139.7" x2="297.18" y2="139.7" width="0.1524" layer="91"/>
 <junction x="309.88" y="139.7"/>
 <label x="297.18" y="139.7" size="1.778" layer="95" rot="R180" xref="yes"/>
+</segment>
+</net>
+<net name="N$9" class="0">
+<segment>
+<pinref part="R15" gate="G$1" pin="2"/>
+<pinref part="IC2" gate="G$1" pin="GPB1"/>
+<wire x1="162.56" y1="71.12" x2="160.02" y2="71.12" width="0.1524" layer="91"/>
 </segment>
 </net>
 </nets>
